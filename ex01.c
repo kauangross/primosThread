@@ -7,7 +7,7 @@
 
 #define NUM_THREADS 8
 
-int Ingressos = 500;
+int Ingressos = 50000000;
 int Vendidos;
 int Auditoria;
 

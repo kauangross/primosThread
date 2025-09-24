@@ -34,8 +34,6 @@ void* worker(void* arg) {
         local_sum += v;
 
         pthread_mutex_unlock(&lock);
-
-        
     }
 
     pthread_mutex_lock(&lock);

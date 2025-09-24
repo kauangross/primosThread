@@ -110,68 +110,66 @@ double executa(int k, char *label, long long *qntPrimos) {
 }
 
 int main(int argc, char** argv) {
-    int k;
+    int k = 0;
     long long qntPrimos, tempoExec = 0;
+    int n = 1;
+
+    int ks[] = {1, 2, 4, 6, 8};
+    n = sizeof(ks) / sizeof(ks[0]);
+    double tempos[n];
+    long long resultados[n];
+    char label[16];
+
     if (argc < 2) {
         printf("Use: %s < 1 | 4 | 0 (nucleos totais) / benchmark |>\n", argv[0]);
         return 1;
     } else if (strcmp(argv[1], "1") == 0) // Executa com 1 thread
     {
-        int valores[] = {1};
-        char label[16];
-        snprintf(label, sizeof(label), "%d thread%s", valores[0], valores[0] > 1 ? "s" : "");
-        tempoExec = executa(valores[0], label, &qntPrimos);
+        k = 1;
+    } else if(strcmp(argv[1], "2") == 0)
+    {
+        k = 2;
     } else if (strcmp(argv[1], "4") == 0) // Executa com 4 threads
     {
-        int valores[] = {4};
-        char label[16];
-        snprintf(label, sizeof(label), "%d thread%s", valores[0], valores[0] > 1 ? "s" : "");
-        tempoExec = executa(valores[0], label, &qntPrimos);
+        k = 4;
     }else if (strcmp(argv[1], "6") == 0)
     {
-        int valores[] = {6};
-        char label[16];
-        snprintf(label, sizeof(label), "%d thread%s", valores[0], valores[0] > 1 ? "s" : "");
-        tempoExec = executa(valores[0], label, &qntPrimos);
+        k = 6;
     } else if (strcmp(argv[1], "8") == 0)
     {
-        int valores[] = {8};
-        char label[16];
-        snprintf(label, sizeof(label), "%d thread%s", valores[0], valores[0] > 1 ? "s" : "");
-        tempoExec = executa(valores[0], label, &qntPrimos);
+        k = 8;
     } else if(strcmp(argv[1], "benchmark") == 0)
     {
         printf("\n-- Executando modo benchmark!\n\n");
-        
-        int valores[] = {1, 2, 4, 6, 8};
-        int n = sizeof(valores) / sizeof(valores[0]);
-
-        double tempos[5];
-        long long resultados[5];
-
-        for (int i = 0; i < n; i++) {
-            char label[16];
-            snprintf(label, sizeof(label), "%d thread%s", valores[i], valores[i] > 1 ? "s" : "");
-            tempos[i] = executa(valores[i], label, &resultados[i]);
-            printf("Primos: %lld, Tempo: %.2f ms\n", resultados[i], tempos[i]);
-        }
-
-        // depois, imprimir tabela de resumo com speedup
-        printf("\nResumo benchmark:\n");
-        printf("threads\ttempo_ms\ttotal_primos\tspeedup_vs_k1\n");
-        for (int i = 0; i < 5; i++) {
-            double speedup = tempos[0] / tempos[i];
-            printf("%d     \t%.2f     \t%lld     \t%.2f    \n", valores[i], tempos[i], resultados[i], speedup);
-        }
-
-    } else {    // Executa com o numero de cpus disponíveis
+    } else if (strcmp(argv[1], "cpu") == 0)
+    {   // Executa com o numero de cpus disponíveis
         k = (int) sysconf(_SC_NPROCESSORS_ONLN);
         printf("\n Nucleos: %d\n", k);
+    } 
 
-        int valores[] = {k};
-        char label[16];
-        snprintf(label, sizeof(label), "%d thread%s", valores[0], valores[0] > 1 ? "s" : "");
-        tempoExec = executa(valores[0], label, &qntPrimos);
+    if(k != 0){ // Benchmark
+        snprintf(label, sizeof(label), "%d thread%s", k, k > 1 ? "s" : "");
+        
+        // Reinicia váriaveis globais
+        next = 1;
+        cont  = 0;
+        
+        tempoExec = executa(k, label, &qntPrimos);
+    } else {
+        for (int i = 0; i < n; i++) {
+            snprintf(label, sizeof(label), "%d thread%s", ks[i], ks[i] > 1 ? "s" : "");
+            tempos[i] = executa(ks[i], label, &resultados[i]);
+            printf("Primos: %lld, Tempo: %.2f ms\n", resultados[i], tempos[i]);
+        }
+    }    
+    
+
+    if(strcmp(argv[1], "benchmark") == 0){
+        printf("\n\n\n\n\n\nthreads\ttempo_ms\ttotal_primos\tspeedup_vs_k1\n\n");
+        for (int i = 0; i < n; i++) {
+            double speedup = tempos[0] / tempos[i];
+            printf("%d     \t%.2f     \t%lld     \t%.2f    \n", ks[i], tempos[i], resultados[i], speedup);
+        }
     }
     
     return 0;
