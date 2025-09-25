@@ -10,7 +10,7 @@
 #define CHUNK 5000
 
 int next = 1;
-long long cont = 0;
+long long primosTotal = 0;
 
 pthread_mutex_t next_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t total_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -45,7 +45,7 @@ void* intervalo(void* arg){
             if (is_prime(i)) local++;
 
         pthread_mutex_lock(&total_mutex);
-        cont += local;
+        primosTotal += local;
         pthread_mutex_unlock(&total_mutex);
     }
 }
@@ -82,8 +82,8 @@ void* progresso(void* arg) {
 }
 
 double executa(int k, char *label, long long *qntPrimos) {
-    next = 0;
-    cont = 0;
+    next = 1;
+    primosTotal = 0;
 
     pthread_t threads[k];
     pthread_t tprog;
@@ -102,9 +102,9 @@ double executa(int k, char *label, long long *qntPrimos) {
     double tempo_ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
 
     printf("Tempo de execucao: %.2f ms\n", tempo_ms);
-    printf("Quantidade de primos: %lld\n", cont);
+    printf("Quantidade de primos: %lld\n", primosTotal);
 
-    *qntPrimos = cont;
+    *qntPrimos = primosTotal;
 
     return tempo_ms;
 }
@@ -148,12 +148,7 @@ int main(int argc, char** argv) {
     } 
 
     if(k != 0){ // Benchmark
-        snprintf(label, sizeof(label), "%d thread%s", k, k > 1 ? "s" : "");
-        
-        // Reinicia váriaveis globais
-        next = 1;
-        cont  = 0;
-        
+        snprintf(label, sizeof(label), "%d thread%s", k, k > 1 ? "s" : ""); 
         tempoExec = executa(k, label, &qntPrimos);
     } else {
         for (int i = 0; i < n; i++) {
