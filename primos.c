@@ -1,53 +1,63 @@
-#include <pthread.h>
+/* primos.c - Conta primos de 1 a N usando k threads
+ * gcc -pthread -O2 -o primos primos.c -lm no terminal do Ubuntu
+ * ./primos k
+ * ./primos benchmark
+ */
+
+ // Cauã Souza e Kauan Gabriel Gross
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <time.h>
-#include <string.h>
+#include <pthread.h>
 #include <unistd.h>
+#include <time.h>
+#include <math.h>
+#include <string.h>
 
-#define N 5000000
-#define CHUNK 5000
+#define N 5000000 // Quantidade de elementos
+#define CHUNK 5000 // Define o tamanho da chunk
 
-int next = 1;
-long long primosTotal = 0;
-
+int next;
 pthread_mutex_t next_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+long long total_primos;
 pthread_mutex_t total_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-
-static bool is_prime(int numero){
-    if(numero <= 1) return false;
-    if(numero <= 3) return true;
-    if(numero % 2 == 0 || numero % 3 == 0) return false;
-
-    for(int i = 5; i*i <= numero; i += 2){
-        if(numero % i == 0) {
-            return false;
-        }
-    }
-    return true;
+int primo(int n) {
+    if (n < 2) return 0;
+    if (n == 2) return 1;
+    if ((n & 1) == 0) return 0;
+    for (int d = 3; d * d <= n; d += 2)
+        if (n % d == 0) return 0;
+    return 1;
 }
 
-void* intervalo(void* arg){
-    int start, end;
-    while (1){
+void* worker(void* arg) {
+    (void)arg;
+    while (1) {
+        int start, end;
+
         pthread_mutex_lock(&next_mutex);
         start = next;
-        if (start > N) { pthread_mutex_unlock(&next_mutex); break; }
+        if (start > N) { // Encerra o looping
+             pthread_mutex_unlock(&next_mutex); break; }
+
         end = start + CHUNK - 1;
-        if (end > N) end = N;
-        next = end + 1;
+
+        if (end > N) end = N; // Caso start + chunk passe da quantidade de numeros
+        
+        next = end + 1; // Atualiza next
         pthread_mutex_unlock(&next_mutex);
 
         long long local = 0;
         for (int i = start; i <= end; i++)
-            if (is_prime(i)) local++;
+            if (primo(i)) local++;
 
         pthread_mutex_lock(&total_mutex);
-        primosTotal += local;
+        total_primos += local;
         pthread_mutex_unlock(&total_mutex);
     }
+    return NULL;
 }
 
 void* progresso(void* arg) {
@@ -61,111 +71,83 @@ void* progresso(void* arg) {
 
         int proc = (ns - 1) / CHUNK;
         if (proc > total_chunks) proc = total_chunks;
-
         double pct = (100.0 * proc) / total_chunks;
         int filled = (int)(bar_width * pct / 100.0);
-
+        
         // imprime a barra
-        printf("\r[");
+        printf("[");
         for (int i = 0; i < bar_width; i++) {
             if (i < filled) printf("=");
             else printf(" ");
         }
-        printf("] %6.2f%%", pct);
+        printf("]");
+
+        printf("\r %6.2f%%", pct);
         fflush(stdout);
 
         if (proc >= total_chunks) break;
-        struct timespec ts = {0, 500000000};
+        struct timespec ts = {0, 200000000};
         nanosleep(&ts, NULL);
     }
     printf("\n");
+    return NULL;
 }
 
-double executa(int k, char *label, long long *qntPrimos) {
+double executar(int k, long long *res_primos) {
     next = 1;
-    primosTotal = 0;
+    total_primos = 0;
 
     pthread_t threads[k];
     pthread_t tprog;
 
-    printf("\n-- Executando com %s!\n\n", label);
-    
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
     pthread_create(&tprog, NULL, progresso, NULL);
-    for (int i = 0; i < k; i++) pthread_create(&threads[i], NULL, intervalo, NULL);
+    for (int i = 0; i < k; i++) pthread_create(&threads[i], NULL, worker, NULL);
     for (int i = 0; i < k; i++) pthread_join(threads[i], NULL);
     pthread_join(tprog, NULL);
-    
+
     clock_gettime(CLOCK_MONOTONIC, &t1);
-    double tempo_ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+    double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
 
-    printf("Tempo de execucao: %.2f ms\n", tempo_ms);
-    printf("Quantidade de primos: %lld\n", primosTotal);
-
-    *qntPrimos = primosTotal;
-
-    return tempo_ms;
+    *res_primos = total_primos;
+    return ms;
 }
 
 int main(int argc, char** argv) {
-    int k = 0;
-    long long qntPrimos, tempoExec = 0;
-    int n = 1;
+    if (argc != 2) { fprintf(stderr, "Uso: %s k | benchmark\n", argv[0]); return 1; }
 
-    int ks[] = {1, 2, 4, 6, 8};
-    n = sizeof(ks) / sizeof(ks[0]);
-    double tempos[n];
-    long long resultados[n];
-    char label[16];
+    if (strcmp(argv[1], "benchmark") == 0) {
+        int ks[] = {1, 2, 4, 6, 8};
+        int nks = sizeof(ks)/sizeof(ks[0]);
+        double tempos[nks];
+        long long resultados[nks];
 
-    if (argc < 2) {
-        printf("Use: %s < 1 | 4 | 0 (nucleos totais) / benchmark |>\n", argv[0]);
-        return 1;
-    } else if (strcmp(argv[1], "1") == 0) // Executa com 1 thread
-    {
-        k = 1;
-    } else if(strcmp(argv[1], "2") == 0)
-    {
-        k = 2;
-    } else if (strcmp(argv[1], "4") == 0) // Executa com 4 threads
-    {
-        k = 4;
-    }else if (strcmp(argv[1], "6") == 0)
-    {
-        k = 6;
-    } else if (strcmp(argv[1], "8") == 0)
-    {
-        k = 8;
-    } else if(strcmp(argv[1], "benchmark") == 0)
-    {
-        printf("\n-- Executando modo benchmark!\n\n");
-    } else if (strcmp(argv[1], "cpu") == 0)
-    {   // Executa com o numero de cpus disponíveis
-        k = (int) sysconf(_SC_NPROCESSORS_ONLN);
-        printf("\n Nucleos: %d\n", k);
-    } 
-
-    if(k != 0){ // Benchmark
-        snprintf(label, sizeof(label), "%d thread%s", k, k > 1 ? "s" : ""); 
-        tempoExec = executa(k, label, &qntPrimos);
-    } else {
-        for (int i = 0; i < n; i++) {
-            snprintf(label, sizeof(label), "%d thread%s", ks[i], ks[i] > 1 ? "s" : "");
-            tempos[i] = executa(ks[i], label, &resultados[i]);
+        // primeiro, executar todas as threads e armazenar tempos e resultados
+        for (int i = 0; i < nks; i++) {
+            printf("\nExecutando com %d threads\n", ks[i]);
+            tempos[i] = executar(ks[i], &resultados[i]);
             printf("Primos: %lld, Tempo: %.2f ms\n", resultados[i], tempos[i]);
         }
-    }    
-    
 
-    if(strcmp(argv[1], "benchmark") == 0){
-        printf("\n\n\n\n\n\nthreads\ttempo_ms\ttotal_primos\tspeedup_vs_k1\n\n");
-        for (int i = 0; i < n; i++) {
+        // depois, imprimir tabela de resumo com speedup
+        printf("\nResumo benchmark:\n");
+        printf("threads\ttempo_ms\ttotal_primos\tspeedup_vs_k1\n");
+        for (int i = 0; i < nks; i++) {
             double speedup = tempos[0] / tempos[i];
             printf("%d     \t%.2f     \t%lld     \t%.2f    \n", ks[i], tempos[i], resultados[i], speedup);
         }
+
+    } else {
+        int k = atoi(argv[1]);
+        if (k <= 0) k = (int) sysconf(_SC_NPROCESSORS_ONLN); // Executa com a quantidade de cpus disponíveis na maquina, caso argv[1] seja o valor zero ou menor
+
+        printf("\nExecutando com %d thread(s)\n", k);
+        long long resultado;
+        double tempo = executar(k, &resultado);
+        printf("Total de primos: %lld\n", resultado);
+        printf("Tempo: %.2f ms\n", tempo);
     }
-    
     return 0;
 }
